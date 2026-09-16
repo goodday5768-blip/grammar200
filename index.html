@@ -71,6 +71,12 @@ td button{padding:4px 10px;font-size:13px}
 .mycert{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line)}
 .mycert button{padding:6px 12px;font-size:14px}
 .teacherlink{text-align:center;margin:18px 0 0}
+.logrow{border-top:1px solid var(--line);padding:9px 0}
+.logrow summary{cursor:pointer;font-variant-numeric:tabular-nums}
+.logrow summary span{margin-right:8px}
+.wr{margin:10px 0 0;padding:10px 12px;background:var(--bg);border-radius:10px;font-size:14px;display:grid;gap:4px}
+.wq{font-family:"Newsreader",Georgia,serif;font-size:16px;line-height:1.55}
+#logMore{margin-top:10px}
 [hidden]{display:none!important}
 </style>
 </head>
@@ -94,6 +100,12 @@ td button{padding:4px 10px;font-size:13px}
     <div class="row" style="justify-content:space-between"><b>번호 선택</b><span class="muted" id="stat"></span></div>
     <p class="muted" style="margin:4px 0 0">첫 번호를 누르고 끝 번호를 누르면 범위가 선택됩니다.</p>
     <div class="grid" id="grid"></div>
+  </div>
+  <div class="card" id="logCard" hidden>
+    <div class="row" style="justify-content:space-between"><b>내 시험 기록</b><span class="muted" id="logStat"></span></div>
+    <p class="muted" style="margin:4px 0 6px">회차를 누르면 틀린 문제와 정답·해설이 보입니다. 기록은 이 휴대폰에만 저장됩니다.</p>
+    <div id="logList"></div>
+    <button class="ghost" id="logMore" hidden>이전 기록 더 보기</button>
   </div>
   <div class="card" id="mycertsCard" hidden>
     <b>내 합격 메시지</b>
@@ -154,8 +166,8 @@ const fmtTime = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDat
 const cleanName = s => s.replace(/\s+/g, ' ').trim();
 const rangeLabel = key => key.includes('-') ? key.replace('-', '~') + '번' : key + '번';
 const keyIds = key => { const [a, b] = key.split('-').map(Number); const o = []; for (let i = a; i <= (b || a); i++) o.push(i); return o; };
-function certCode(name, key, tries, time) {
-  const s = `${SALT}|${name}|${key}|${tries}|${time}`;
+function certCode(name, key, tries, time, extra) {
+  const s = `${SALT}|${name}|${key}|${tries}|${time}` + (extra ? `|${extra}` : '');
   let h1 = 0x811c9dc5, h2 = 0x5bd1e995;
   for (const ch of s) { const c = ch.codePointAt(0); h1 = Math.imul(h1 ^ c, 16777619) >>> 0; h2 = Math.imul(h2 ^ c, 2246822507) >>> 0; h2 = (h2 ^ (h2 >>> 13)) >>> 0; }
   const A = '23456789ABCDEFGHJKMNPQRSTVWXYZ'; let out = '';
@@ -163,7 +175,9 @@ function certCode(name, key, tries, time) {
   for (let i = 0; i < 4; i++) { out += A[h2 % 30]; h2 = Math.floor(h2 / 30); }
   return out.slice(0, 4) + '-' + out.slice(4);
 }
-const certText = c => `[수능문법200제 합격]\n이름: ${c.name}\n범위: ${rangeLabel(c.key)}\n도전: ${c.tries}번째\n시각: ${c.time}\n인증: ${c.code}`;
+const certExtra = c => c.hist ? `${c.hist}|${c.wrong}|${c.dur}` : '';
+const certText = c => `[수능문법200제 합격]\n이름: ${c.name}\n범위: ${rangeLabel(c.key)}\n도전: ${c.tries}번째\n` +
+  (c.hist ? `기록: ${c.hist}\n틀린 유형: ${c.wrong}\n걸린 시간: ${c.dur}\n` : '') + `시각: ${c.time}\n인증: ${c.code}`;
 function parseCerts(text) {
   const found = [], bad = [];
   for (const p of text.split('수능문법200제 합격').slice(1)) {
@@ -173,8 +187,10 @@ function parseCerts(text) {
     const time = (p.match(/시각\s*[:：]\s*(\d{4}-\d{2}-\d{2} \d{2}:\d{2})/) || [])[1];
     const code = (p.match(/인증\s*[:：]\s*([0-9A-Z]{4}-[0-9A-Z]{4})/) || [])[1];
     if (!name || !rg || !tries || !time || !code) { bad.push(p); continue; }
-    const c = {name: cleanName(name), key: rg[2] ? `${rg[1]}-${rg[2]}` : rg[1], tries: +tries, time, code};
-    c.ok = certCode(c.name, c.key, c.tries, c.time) === c.code;
+    const line = re => { const m = p.match(re); return m ? m[1].replace(/\s+/g, ' ').trim() : ''; };
+    const c = {name: cleanName(name), key: rg[2] ? `${rg[1]}-${rg[2]}` : rg[1], tries: +tries, time, code,
+      hist: line(/기록\s*[:：]\s*([^\n\r]+)/), wrong: line(/틀린 유형\s*[:：]\s*([^\n\r]+)/), dur: line(/걸린 시간\s*[:：]\s*([^\n\r]+)/)};
+    c.ok = certCode(c.name, c.key, c.tries, c.time, certExtra(c)) === c.code;
     found.push(c);
   }
   return {found, bad: bad.length};
@@ -185,6 +201,36 @@ async function copyText(text) {
   ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0'; document.body.appendChild(ta); ta.select();
   let ok = false; try { ok = document.execCommand('copy'); } catch (e) {}
   ta.remove(); return ok;
+}
+
+// ---- 시험 기록 (학생 기기) ----
+let log = store.get('log', []);   // [{at, key, score, n, sec, wrong:[{id, type, h, q, mine, ans, ex}]}]
+function saveLog() {
+  if (log.length > 500) log = log.slice(-500);
+  try { localStorage.setItem('g200:log', JSON.stringify(log)); }
+  catch (e) { log = log.slice(-100); try { localStorage.setItem('g200:log', JSON.stringify(log)); } catch (e2) {} }
+}
+const fmtDur = sec => { const m = Math.round(sec / 60); return m < 1 ? '1분 미만' : m < 60 ? `${m}분` : `${Math.floor(m / 60)}시간 ${m % 60}분`; };
+const plain = html => { const d = document.createElement('div'); d.innerHTML = html; return d.textContent; };
+const plainBox = html => plain(html.replace(/<u>(.*?)<\/u>/g, '[$1]').replace(/<span class="blank">.*?<\/span>/g, '_____'));
+function sincePass(key) {           // 마지막 합격 이후의 회차들
+  const out = [];
+  for (let i = log.length - 1; i >= 0; i--) { const e = log[i]; if (e.key !== key) continue; if (e.score === e.n) break; out.unshift(e); }
+  return out;
+}
+let logLimit = 20;
+function renderLog() {
+  $('#logCard').hidden = !log.length;
+  if (!log.length) return;
+  const passes = log.filter(e => e.score === e.n).length, wrongs = log.reduce((s, e) => s + e.wrong.length, 0);
+  $('#logStat').textContent = `총 ${log.length}회 · 합격 ${passes}회 · 틀린 문제 ${wrongs}개`;
+  $('#logList').innerHTML = log.slice(-logLimit).reverse().map(e => {
+    const pass = e.score === e.n;
+    const body = e.wrong.length ? e.wrong.map(w => `<div class="wr"><div class="muted">${w.type} · ${w.id}번 지문 · ${esc(w.h)}</div><div class="wq">${esc(w.q)}</div><div>내 답: <span class="ngc">${esc(w.mine)}</span></div><div>정답: <span class="okc">${esc(w.ans)}</span></div>${w.ex ? `<div class="muted">${esc(w.ex)}</div>` : ''}</div>`).join('')
+      : '<p class="muted" style="margin:8px 0 0">모두 정답</p>';
+    return `<details class="logrow"><summary><span>${e.at}</span><span>${rangeLabel(e.key)}</span><span class="${pass ? 'okc' : 'ngc'}">${e.score}/${e.n} ${pass ? '합격' : '불합격'}</span><span class="muted">${fmtDur(e.sec)}</span></summary>${body}</details>`;
+  }).join('');
+  $('#logMore').hidden = log.length <= logLimit;
 }
 
 function renderMyCerts() {
@@ -204,15 +250,16 @@ function renderTeacher() {
   const q = cleanName($('#filter').value);
   const rows = roster.filter(c => !q || c.name.includes(q));
   const by = {};
-  rows.forEach(c => { const s = by[c.name] || (by[c.name] = {ids: new Set(), keys: [], last: '', bad: 0}); if (!c.ok) { s.bad++; return; } keyIds(c.key).forEach(i => s.ids.add(i)); s.keys.push(c.key); if (c.time > s.last) s.last = c.time; });
+  rows.forEach(c => { const s = by[c.name] || (by[c.name] = {ids: new Set(), keys: [], last: '', bad: 0, w: [0, 0, 0], hasW: false}); if (!c.ok) { s.bad++; return; }
+    const wm = (c.wrong || '').match(/문법 (\d+) · 해석 (\d+) · 단어 (\d+)/); if (wm) { s.hasW = true; [1, 2, 3].forEach(j => s.w[j - 1] += +wm[j]); } else if (c.wrong === '없음') s.hasW = true; keyIds(c.key).forEach(i => s.ids.add(i)); s.keys.push(c.key); if (c.time > s.last) s.last = c.time; });
   const names = Object.keys(by).sort((a, b) => a.localeCompare(b, 'ko'));
-  $('#summary').innerHTML = names.length ? '<tr><th>이름</th><th>합격 지문 수</th><th>합격한 범위</th><th>마지막 합격</th></tr>' + names.map(n => {
+  $('#summary').innerHTML = names.length ? '<tr><th>이름</th><th>합격 지문 수</th><th>틀린 유형 합계</th><th>합격한 범위</th><th>마지막 합격</th></tr>' + names.map(n => {
     const s = by[n]; const keys = [...new Set(s.keys)].sort((a, b) => parseInt(a) - parseInt(b) || a.length - b.length);
-    return `<tr><td>${esc(n)}</td><td>${s.ids.size} / 200</td><td class="wrap">${keys.map(rangeLabel).join(', ') || '-'}${s.bad ? ` <span class="ngc">(불일치 ${s.bad}건)</span>` : ''}</td><td>${s.last || '-'}</td></tr>`;
+    return `<tr><td>${esc(n)}</td><td>${s.ids.size} / 200</td><td>${s.hasW ? `문법 ${s.w[0]} · 해석 ${s.w[1]} · 단어 ${s.w[2]}` : '-'}</td><td class="wrap">${keys.map(rangeLabel).join(', ') || '-'}${s.bad ? ` <span class="ngc">(불일치 ${s.bad}건)</span>` : ''}</td><td>${s.last || '-'}</td></tr>`;
   }).join('') : '<tr><td class="muted">아직 붙여 넣은 합격 메시지가 없습니다.</td></tr>';
   const sorted = rows.map((c) => [c, roster.indexOf(c)]).sort((a, b) => b[0].time.localeCompare(a[0].time));
-  $('#roster').innerHTML = sorted.length ? '<tr><th>이름</th><th>범위</th><th>도전</th><th>합격 시각</th><th>인증</th><th></th></tr>' + sorted.map(([c, i]) =>
-    `<tr><td>${esc(c.name)}</td><td>${rangeLabel(c.key)}</td><td>${c.tries}번째</td><td>${c.time}</td><td>${c.ok ? '<span class="okc">확인</span>' : '<span class="ngc">코드 불일치</span>'}</td><td><button class="ghost" data-i="${i}">삭제</button></td></tr>`).join('') : '';
+  $('#roster').innerHTML = sorted.length ? '<tr><th>이름</th><th>범위</th><th>도전</th><th>점수 변화</th><th>틀린 유형</th><th>걸린 시간</th><th>합격 시각</th><th>인증</th><th></th></tr>' + sorted.map(([c, i]) =>
+    `<tr><td>${esc(c.name)}</td><td>${rangeLabel(c.key)}</td><td>${c.tries}번째</td><td>${esc(c.hist || '-')}</td><td>${esc(c.wrong || '-')}</td><td>${esc(c.dur || '-')}</td><td>${c.time}</td><td>${c.ok ? '<span class="okc">확인</span>' : '<span class="ngc">코드 불일치</span>'}</td><td><button class="ghost" data-i="${i}">삭제</button></td></tr>`).join('') : '';
   $('#roster').querySelectorAll('button').forEach(b => b.onclick = () => { roster.splice(+b.dataset.i, 1); store.set('roster', roster); renderTeacher(); });
 }
 
@@ -232,7 +279,7 @@ function paintGrid() {
 
 function renderHome() {
   $('#home').hidden = false; $('#test').hidden = true; $('#teacher').hidden = true;
-  renderMyCerts();
+  renderMyCerts(); renderLog();
   const g = $('#grid'); g.innerHTML = '';
   let n = 0, p = 0;
   for (let i = 1; i <= 200; i++) {
@@ -337,7 +384,8 @@ function newRound() {
   cur.qs = makeSet(ids); cur.sel = Array(cur.qs.length).fill(-1); updateSubmit();
   $('#tNo').textContent = label;
   $('#tSrc').textContent = ids.length === 1 ? BANK[ids[0]].src : `${ids.length}지문에서 출제`;
-  $('#tTry').textContent = `${rec[key].tries + 1}번째 도전`;
+  $('#tTry').textContent = `${sincePass(key).length + 1}번째 도전`;
+  cur.t0 = Date.now();
   $('#result').hidden = true; $('#next').hidden = true; $('#submit').hidden = false;
   const box = $('#qs'); box.innerHTML = ''; box.className = '';
   cur.qs.forEach((q, qi) => {
@@ -368,6 +416,10 @@ function grade() {
   });
   $('#qs').className = 'done';
   const r = rec[key]; r.tries++;
+  const prev = sincePass(key);
+  const entry = {at: fmtTime(new Date()), key, score, n: qs.length, sec: Math.min(3600, Math.round((Date.now() - cur.t0) / 1000)),
+    wrong: qs.map((q, qi) => sel[qi] === q.ans ? null : {id: q.id, type: q.type, h: q.h, q: plainBox(q.box), mine: q.opts[sel[qi]], ans: q.opts[q.ans], ex: q.ex ? plain(q.ex) : ''}).filter(Boolean)};
+  log.push(entry); saveLog();
   if (ids.length > 1) ids.forEach(i => { rec[i] = rec[i] || {tries: 0, pass: false}; if (!rec[i].pass) rec[i].tries++; });
   const res = $('#result'); res.hidden = false;
   $('#submit').hidden = true; $('#next').hidden = false;
@@ -376,13 +428,20 @@ function grade() {
     const when = new Date().toLocaleString('ko-KR');
     r.pass = true; r.passedAt = when;
     const time = fmtTime(new Date());
-    r.cert = {name, key, tries: r.tries, time, code: certCode(name, key, r.tries, time)};
+    const cyc = [...prev, entry];
+    const cnt = {문법: 0, 해석: 0, 단어: 0}; cyc.forEach(e => e.wrong.forEach(w => cnt[w.type]++));
+    const scores = cyc.map(e => `${e.score}/${e.n}`);
+    r.cert = {name, key, tries: cyc.length, time,
+      hist: (scores.length > 8 ? `(앞 ${scores.length - 8}회 생략) ` : '') + scores.slice(-8).join(' → '),
+      wrong: cnt.문법 + cnt.해석 + cnt.단어 ? `문법 ${cnt.문법} · 해석 ${cnt.해석} · 단어 ${cnt.단어}` : '없음',
+      dur: fmtDur(cyc.reduce((s, e) => s + e.sec, 0))};
+    r.cert.code = certCode(name, key, r.cert.tries, time, certExtra(r.cert));
     ids.forEach(i => { rec[i] = rec[i] || {tries: 0}; rec[i].pass = true; rec[i].passedAt = rec[i].passedAt || when; });
     res.className = 'card banner pass';
     const shown = [...new Set(qs.map(q => q.id))].sort((a, b) => a - b);
     res.innerHTML = `<div class="big">합격</div>` +
-      `<div>${label} ${N}문제 모두 정답 · ${r.tries}번째 도전에서 합격</div>` +
-      `<div class="cert"><b>이 메시지를 선생님께 보내세요</b><textarea id="certTxt" rows="6" readonly>${esc(certText(r.cert))}</textarea><div class="row"><button id="copyCert">메시지 복사</button><button class="ghost" id="shareCert">공유하기</button></div><p class="muted" id="certMsg" style="margin:6px 0 0"></p></div>` +
+      `<div>${label} ${N}문제 모두 정답 · ${cyc.length}번째 도전에서 합격</div>` +
+      `<div class="cert"><b>이 메시지를 선생님께 보내세요</b><textarea id="certTxt" rows="9" readonly>${esc(certText(r.cert))}</textarea><div class="row"><button id="copyCert">메시지 복사</button><button class="ghost" id="shareCert">공유하기</button></div><p class="muted" id="certMsg" style="margin:6px 0 0"></p></div>` +
       shown.map(i => `<details style="margin-top:12px;text-align:left"><summary style="cursor:pointer">${i}번 교정된 지문 보기</summary><p class="passage">${esc(BANK[i].p)}</p></details>`).join('');
     $('#next').textContent = '번호 선택으로'; $('#next').onclick = renderHome;
     const txt = certText(r.cert);
@@ -408,6 +467,7 @@ $('#home2').onclick = () => {
   setTimeout(() => { delete b.dataset.armed; b.textContent = '번호 선택으로'; }, 4000);
 };
 $('#teacherBtn').onclick = renderTeacher;
+$('#logMore').onclick = () => { logLimit += 30; renderLog(); };
 $('#tBack').onclick = renderHome;
 $('#filter').oninput = renderTeacher;
 $('#addCerts').onclick = () => {
@@ -422,7 +482,7 @@ $('#addCerts').onclick = () => {
   renderTeacher();
 };
 $('#copyTable').onclick = async () => {
-  const lines = [['이름', '범위', '도전', '합격 시각', '인증'].join('\t'), ...roster.map(c => [c.name, rangeLabel(c.key), c.tries, c.time, c.ok ? '확인' : '코드 불일치'].join('\t'))];
+  const lines = [['이름', '범위', '도전', '점수 변화', '틀린 유형', '걸린 시간', '합격 시각', '인증'].join('\t'), ...roster.map(c => [c.name, rangeLabel(c.key), c.tries, c.hist || '', c.wrong || '', c.dur || '', c.time, c.ok ? '확인' : '코드 불일치'].join('\t'))];
   $('#rosterMsg').textContent = await copyText(lines.join('\n')) ? `${roster.length}건을 복사했습니다. 엑셀이나 구글 시트에 붙여 넣으세요.` : '복사가 막혀 있습니다. 이 기기에서는 표를 길게 눌러 선택해 복사하세요.';
 };
 $('#name').value = store.get('name', '');
