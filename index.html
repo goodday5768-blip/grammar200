@@ -358,6 +358,16 @@ function makeSet(ids) {
       }
     }
   }
+  // 정답 번호 균등(2026-09-18 사용자 확정: 정답이 한 번호에 몰리면 안 된다) — 보기가 3개 이상인 문제는
+  // 정답을 이 회차에서 가장 덜 나온 번호 자리로 옮긴다(동률은 무작위, 직전 문제와 같은 자리는 피함). O/X 문제는 제외.
+  const hist = [0, 0, 0, 0]; let prev = -1;
+  for (const q of qs) {
+    if (q.opts.length < 3) continue;
+    const n = q.opts.length, min = Math.min(...hist.slice(0, n));
+    let c = [...Array(n).keys()].filter(i => hist[i] === min); if (c.length > 1 && c.includes(prev)) c = c.filter(i => i !== prev);
+    const target = c[Math.random() * c.length | 0], i = q.ans;
+    [q.opts[i], q.opts[target]] = [q.opts[target], q.opts[i]]; q.ans = target; hist[target]++; prev = target;
+  }
   store.set('use', use);
   return qs;
 }
