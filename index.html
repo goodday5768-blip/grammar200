@@ -527,7 +527,9 @@ $('#home2').onclick = () => {
 $('#teacherBtn').onclick = () => { renderTeacher(); loadTeacher(); };
 // ---- 선생님 화면 잠금(2026-09-23 사용자 확정: 학생에게는 보이지 않는다) ----
 // 앱 주소 뒤에 ?teacher=코드 를 붙여 한 번 열면 이 기기에 저장되고 버튼이 나타난다. 제목을 빠르게 7번 누르면 코드 입력창.
-{ const q = new URLSearchParams(location.search).get('teacher'); if (q) { store.set('tcode', q.trim()); history.replaceState(null, '', location.pathname); } }
+// 2026-09-25 사용자 확정: 주소 뒤 `?teacher` 만 붙이면 열린다(코드 생략 시 기본 코드). 코드를 바꾸려면 서버 TEACHER_CODE를 바꾸고 `?teacher=새코드`로 연다.
+const T_DEFAULT = 'ls2026';
+{ const q = new URLSearchParams(location.search); if (q.has('teacher')) { store.set('tcode', (q.get('teacher') || '').trim() || T_DEFAULT); history.replaceState(null, '', location.pathname); } }
 const tcode = () => store.get('tcode', '');
 $('#teacherBtn').hidden = !tcode();
 { let taps = 0, t0 = 0; $('#appTitle').addEventListener('click', () => { const now = Date.now(); taps = now - t0 < 1500 ? taps + 1 : 1; t0 = now;
@@ -541,7 +543,7 @@ async function loadTeacher() {
     const r = await fetch(`${url}?teacher=${encodeURIComponent(tcode())}&app=${encodeURIComponent(APP)}&_=${Date.now()}`);
     const j = await r.json();
     if (!j.ok) {
-      if (j.error === 'code') { store.set('tcode', ''); msg.textContent = '선생님 코드가 맞지 않습니다. 주소 뒤에 ?teacher=코드 를 붙여 다시 여세요.'; $('#teacherBtn').hidden = true; return; }
+      if (j.error === 'code') { store.set('tcode', ''); msg.textContent = '선생님 코드가 맞지 않습니다. 주소 뒤에 ?teacher (코드를 바꿨으면 ?teacher=새코드) 를 붙여 다시 여세요.'; $('#teacherBtn').hidden = true; return; }
       msg.textContent = '불러오지 못했습니다: ' + (j.error || ''); return;
     }
     msg.textContent = `${j.at} 기준 · 학생 ${j.students.length}명 · 채점 ${j.recent.length}건`;
