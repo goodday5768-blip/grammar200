@@ -133,7 +133,7 @@ td button{padding:4px 10px;font-size:13px}
       <button id="go">시험 시작</button>
     </div>
     <p class="muted" id="msg" style="margin:8px 0 0"></p>
-    <p class="muted" style="margin:8px 0 0">번호 하나만 풀려면 끝 번호를 비워 두세요. 번호 하나는 <b>문법 2 · 해석 2 · 단어 1</b>, 모두 5문제입니다. 범위를 고르면 <b>지문마다 3문제</b>(문법 1 · 해석 1 · 단어 1)가 나오되 <b>한 번에 최대 20문제</b>입니다(1~5번이면 15문제, 1~50번이어도 20문제 — 이때는 범위 안의 지문에서 덜 푼 것부터 골라 문법·해석·단어를 고르게 냅니다). 문제마다 배점이 표시되고 <b>100점 만점</b>으로 채점되며, 채점 뒤 모든 문제에 정답과 해설이 보입니다.</p>
+    <p class="muted" style="margin:8px 0 0">번호 하나만 풀려면 끝 번호를 비워 두세요. 번호 하나는 <b>문법 3 · 해석 1 · 단어 1</b>, 모두 5문제입니다. 범위를 고르면 <b>지문마다 3문제</b>가 나오되 <b>한 번에 최대 20문제</b>이고(1~5번이면 15문제, 1~50번이어도 20문제 — 이때는 범위 안에서 덜 푼 지문부터), 문제는 <b>문법 · 해석 · 단어가 3 : 1 : 1</b>로 나옵니다. 문제마다 배점이 표시되고 <b>100점 만점</b>으로 채점되며, 채점 뒤 모든 문제에 정답과 해설이 보입니다.</p>
   </div>
   <div class="card">
     <div class="row" style="justify-content:space-between"><b>번호 선택</b><span class="muted" id="stat"></span></div>
@@ -389,30 +389,35 @@ function pick(ids, prefix, need, taken, usedIds) {
   return out;
 }
 
-// 번호 하나 = 5문제(문법2·해석2·단어1), 범위 = 지문마다 3문제(문법1·해석1·단어1)
+// 번호 하나 = 5문제(문법3·해석1·단어1), 범위 = 지문마다 3문제(최대 20) · 문법·해석·단어 3:1:1(2026-10-02)
 // 2026-09-30 사용자 지시: 범위가 넓어도(1~50번 → 150문제) 한 번에 최대 20문제.
 const MAXQ = 20;
 function qCount(r) { let n = 0; for (let i = r[0]; i <= r[1]; i++) if (BANK[i]) n++; return n <= 1 ? 5 : Math.min(MAXQ, n * 3); }
 function rangePlan(ids) {
-  if (ids.length * 3 <= MAXQ) return ids.map(id => [[id], 1, 1, 1]);
-  // 지문 고르기: 덜 푼 지문 먼저(문항 사용 횟수 합, 동률은 무작위) — 20지문 넘게 고르면 20지문만, 그 밖은 20문제를 지문에 고르게(지문당 2~3문제)
-  const done = id => Object.values(use[id] || {}).reduce((s, x) => s + x, 0);
-  const chosen = shuffle(ids).sort((a, b) => done(a) - done(b)).slice(0, MAXQ).sort((a, b) => a - b);
-  const per = chosen.map((_, i) => Math.floor(MAXQ / chosen.length) + (i < MAXQ % chosen.length ? 1 : 0));
-  const order = shuffle(chosen.map((_, i) => i)); const cnt = new Array(chosen.length).fill(0);   // 여분 문제를 받을 지문도 무작위
-  order.forEach((i, j) => cnt[i] = per[j]);
-  // 유형: 3문제면 문법·해석·단어 하나씩, 1~2문제면 문법→해석→단어를 돌아가며(시작 유형 무작위) — 회차 전체에서 세 유형이 고르게
-  let rot = Math.random() * 3 | 0;
-  return chosen.map((id, i) => {
-    const c = [0, 0, 0];
-    for (let j = 0; j < cnt[i]; j++) c[(rot + j) % 3]++;
-    rot = (rot + cnt[i]) % 3;
-    return [[id], ...c];
-  });
+  // 지문 고르기: 지문 수 × 3이 20 이하면 모든 지문 3문제씩, 넘으면 20문제 — 20지문 넘게 고르면 덜 푼 20지문(문항 사용 횟수 합, 동률 무작위)
+  let chosen = ids, cnt = ids.map(() => 3);
+  if (ids.length * 3 > MAXQ) {
+    const done = id => Object.values(use[id] || {}).reduce((s, x) => s + x, 0);
+    chosen = shuffle(ids).sort((a, b) => done(a) - done(b)).slice(0, MAXQ).sort((a, b) => a - b);
+    const per = chosen.map((_, i) => Math.floor(MAXQ / chosen.length) + (i < MAXQ % chosen.length ? 1 : 0));
+    cnt = new Array(chosen.length).fill(0);
+    shuffle(chosen.map((_, i) => i)).forEach((i, j) => cnt[i] = per[j]);   // 여분 문제를 받을 지문도 무작위
+  }
+  // 2026-10-02 사용자 지시(수능문법 200제만): 문법·해석·단어 = 3:1:1. 해석·단어 자리를 지문마다 돌아가며 하나씩 주고 나머지는 문법.
+  const N = cnt.reduce((s, x) => s + x, 0), nt = Math.max(1, Math.round(N / 5)), nv = Math.max(1, Math.round(N / 5));
+  const c = cnt.map(() => [0, 0, 0]), free = i => cnt[i] - c[i][1] - c[i][2];
+  const order = shuffle(chosen.map((_, i) => i));
+  let k = 0;
+  for (const [slot, need] of [[1, nt], [2, nv]])
+    for (let got = 0, guard = 0; got < need && guard < order.length * 3; guard++) {
+      const i = order[k++ % order.length];
+      if (free(i) > 1 || (free(i) === 1 && cnt[i] === 1)) { c[i][slot]++; got++; }   // 지문마다 문법 1개는 남긴다(1문제 지문은 예외)
+    }
+  return chosen.map((id, i) => [[id], cnt[i] - c[i][1] - c[i][2], c[i][1], c[i][2]]);
 }
 function makeSet(ids) {
   const qs = [];
-  const plan = ids.length === 1 ? [[ids, 2, 2, 1]] : rangePlan(ids);
+  const plan = ids.length === 1 ? [[ids, 3, 1, 1]] : rangePlan(ids);   // 번호 하나: 문법 3·해석 1·단어 1(10-02)
   for (const [group, ng, nt, nv] of plan) {
     const taken = [], usedIds = new Set();
     for (const {id, k} of pick(group, 'g', ng, taken, usedIds)) {
