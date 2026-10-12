@@ -134,7 +134,7 @@ body:not(.nobrand) #submit::before{content:"";display:inline-block;width:1.35em;
       <button id="go">시험 시작</button>
     </div>
     <p class="muted" id="msg" style="margin:8px 0 0"></p>
-    <p class="muted" style="margin:8px 0 0">번호 하나만 풀려면 끝 번호를 비워 두세요. 번호 하나는 <b>문법 3 · 해석 1 · 단어 1</b>, 모두 5문제입니다. <b>100점 만점에 90점 이상이면 합격</b>, 불합격이면 합격할 때까지 새 문제로 다시 풉니다(합격하면 선생님·학부모님께 문자). 범위를 고르면 <b>지문마다 3문제</b>가 나오되 <b>한 번에 최대 20문제</b>이고(1~5번이면 15문제, 1~50번이어도 20문제 — 이때는 범위 안에서 덜 푼 지문부터), 문제는 <b>문법 · 해석 · 단어가 3 : 1 : 1</b>로 나옵니다. 문제마다 배점이 표시되고 <b>100점 만점</b>으로 채점되며, 채점 뒤 모든 문제에 정답과 해설이 보입니다.</p>
+    <p class="muted" style="margin:8px 0 0">번호 하나만 풀려면 끝 번호를 비워 두세요. 번호 하나는 <b>문법 3 · 해석 1 · 단어 1</b>, 모두 5문제입니다. <b>100점 만점에 90점 이상이면 합격</b>, 불합격이면 합격할 때까지 새 문제로 다시 풉니다(합격하면 선생님께 문자). 범위를 고르면 <b>지문마다 3문제</b>가 나오되 <b>한 번에 최대 20문제</b>이고(1~5번이면 15문제, 1~50번이어도 20문제 — 이때는 범위 안에서 덜 푼 지문부터), 문제는 <b>문법 · 해석 · 단어가 3 : 1 : 1</b>로 나옵니다. 문제마다 배점이 표시되고 <b>100점 만점</b>으로 채점되며, 채점 뒤 모든 문제에 정답과 해설이 보입니다.</p>
   </div>
   <div class="card">
     <div class="row" style="justify-content:space-between"><b>번호 선택</b><span class="muted" id="stat"></span></div>
@@ -467,7 +467,7 @@ function pick(ids, prefix, need, taken, usedIds) {
 // 문법 = 토익 PART 5식 4지선다·난이도 상(10-07) · 번호 하나 = 5문제(문법3·해석1·단어1), 범위 = 지문마다 3문제(최대 20) · 문법·해석·단어 3:1:1(2026-10-02)
 // 2026-09-30 사용자 지시: 범위가 넓어도(1~50번 → 150문제) 한 번에 최대 20문제.
 const MAXQ = 20;
-const PM = 90;   // 합격선(2026-10-04 사용자 지시: 수업관리 앱 모두 90점 이상 합격, 불합격이면 새 문제로 다시, 합격하면 선생님·학부모 문자)
+const PM = 90;   // 합격선(2026-10-04 사용자 지시: 수업관리 앱 모두 90점 이상 합격, 불합격이면 새 문제로 다시, 합격하면 선생님 문자 — 10-10부터 학부모 문자 중단)
 function qCount(r) { let n = 0; for (let i = r[0]; i <= r[1]; i++) if (BANK[i]) n++; return n <= 1 ? 5 : Math.min(MAXQ, n * 3); }
 function rangePlan(ids) {
   // 지문 고르기: 지문 수 × 3이 20 이하면 모든 지문 3문제씩, 넘으면 20문제 — 20지문 넘게 고르면 덜 푼 20지문(문항 사용 횟수 합, 동률 무작위)
@@ -629,7 +629,7 @@ function grade() {
   res.className = 'card banner ' + (pass ? 'pass' : 'fail');
   const shown = [...new Set(qs.map(q => q.id))].sort((a, b) => a - b);
   res.innerHTML = `<div class="big">${pass ? '합격' : '불합격'} · ${score}점</div>` +
-    `<div>합격선 ${PM}점 · ${label} ${N}문제 중 ${correct}문제 정답 · ${pass ? `${cur.round}번째 도전에서 합격 — 선생님과 학부모님께 결과 문자가 갑니다` : '틀린 문제의 해설을 확인한 뒤, 합격할 때까지 전에 나온 문제를 뺀 새 문제로 다시 풀어 주세요'}</div>` +
+    `<div>합격선 ${PM}점 · ${label} ${N}문제 중 ${correct}문제 정답 · ${pass ? `${cur.round}번째 도전에서 합격 — 선생님께 결과 문자가 갑니다` : '틀린 문제의 해설을 확인한 뒤, 합격할 때까지 전에 나온 문제를 뺀 새 문제로 다시 풀어 주세요'}</div>` +
     `<div class="cert"><b>이 메시지를 선생님께 보내세요</b><textarea id="certTxt" rows="8" readonly>${esc(txt)}</textarea><div class="row"><button id="copyCert">메시지 복사</button><button class="ghost" id="shareCert">공유하기</button></div><p class="muted" id="certMsg" style="margin:6px 0 0"></p></div>` +
     shown.map(i => `<details style="margin-top:12px;text-align:left"><summary style="cursor:pointer">${i}번 교정된 지문 보기</summary><p class="passage">${esc(BANK[i].p)}</p></details>`).join('');
   $('#copyCert').onclick = async () => { $('#certMsg').textContent = await copyText(txt) ? '복사했습니다. 카톡에 붙여 넣어 선생님께 보내세요.' : '복사가 막혀 있습니다. 위 메시지 칸을 길게 눌러 전체 선택 후 복사하세요.'; };
