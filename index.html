@@ -134,6 +134,7 @@ body:not(.nobrand) #submit::before{content:"";display:inline-block;width:1.35em;
       <input type="number" id="to" class="num" min="1" max="200" placeholder="끝" inputmode="numeric" aria-label="끝 번호">
       <button id="go">시험 시작</button>
     </div>
+    <button class="ghost" id="wrongGo" hidden style="width:100%;margin-top:8px;font-weight:700"></button>
     <p class="muted" id="msg" style="margin:8px 0 0"></p>
     <p class="muted" style="margin:8px 0 0">번호 하나만 풀려면 끝 번호를 비워 두세요. 번호 하나는 <b>문법 3 · 해석 1 · 단어 1</b>, 모두 5문제입니다. <b>100점 만점에 90점 이상이면 합격</b>, 불합격이면 합격할 때까지 새 문제로 다시 풉니다. 범위를 고르면 <b>지문마다 3문제</b>가 나오되 <b>한 번에 최대 20문제</b>이고(1~5번이면 15문제, 1~50번이어도 20문제 — 이때는 범위 안에서 덜 푼 지문부터), 문제는 <b>문법 · 해석 · 단어가 3 : 1 : 1</b>로 나옵니다. 문제마다 배점이 표시되고 <b>100점 만점</b>으로 채점되며, 채점 뒤 모든 문제에 정답과 해설이 보입니다.</p>
   </div>
@@ -300,6 +301,7 @@ const store = {
   set(k, v) { try { localStorage.setItem('g200:' + k, JSON.stringify(v)); } catch (e) {} }
 };
 const KEYST = {get: () => store.get('k', ''), set: v => store.set('k', v), del: () => store.set('k', '')};   // 콘텐츠 열쇠 — g200:k
+let wrongs = store.get('wrongs', {});   // 2026-11-02 틀린 지문 {id: {n, at}} — 그 지문 문제를 하나라도 틀리면 담고, 다 맞히면 뺀다
 let rec = store.get('rec2', {});     // {id: {tries, best}} 지문별 시험 횟수·최고 점수
 let certs = store.get('certs', []);  // 내 점수 메시지(최근 20회)
 // 배점: 100점을 N문제에 정수로 나눈다. 나머지는 앞 문제부터 1점씩 더 준다(2026-09-18 점수제).
@@ -442,7 +444,7 @@ function renderHome() {
     g.appendChild(b);
   }
   $('#stat').textContent = `만점 ${p} / ${n}지문`;
-  paintGrid();
+  paintGrid(); paintWrong();
   window.scrollTo(0, 0);
 }
 
@@ -542,18 +544,21 @@ function updateSubmit() {
 }
 
 async function start() {
-  const r = readRange();
+  const rv = reviewStart; reviewStart = false;
+  const r = rv ? [0, 0] : readRange();
   if (!r) { $('#msg').textContent = '1~200 사이 번호를 입력하세요.'; return; }
-  const ids = []; for (let i = r[0]; i <= r[1]; i++) if (BANK[i]) ids.push(i);
+  const ids = rv ? wrongIds() : []; if (!rv) for (let i = r[0]; i <= r[1]; i++) if (BANK[i]) ids.push(i);
+  if (rv && !ids.length) { $('#msg').textContent = '다시 풀 틀린 지문이 없습니다.'; return; }
   const name = nameValue(); store.set('name', name); if (name && window.LEESS && !LEESS.ok(name)) { $('#msg').textContent = LEESS.msg(); (useRoster() ? $('#nameSel') : $('#name')).focus(); window.scrollTo(0, 0); return; } /*LEESS*/
   if (!name || (useRoster() && !CFG.roster.includes(name))) {
     $('#msg').textContent = useRoster() ? '명단에서 본인 이름을 선택해야 시작할 수 있습니다.' : '이름을 먼저 입력하세요. 점수 메시지에 이름이 들어갑니다.';
     (useRoster() ? $('#nameSel') : $('#name')).focus(); window.scrollTo(0, 0); return;
   }
   if (store.get('consent', '') !== consentId()) {   // 첫 시작 전 이용 동의(브라우저마다 1회)
+    if (rv) reviewStart = true;   // 동의 뒤 start()가 다시 불려도 다시 풀기로 이어지게
     $('#consentV').textContent = '동의 문구 ' + consentId(); $('#consentCard').hidden = false; $('#consentCard').scrollIntoView({block: 'center'}); return;
   }
-  const label = r[0] === r[1] ? `${r[0]}번` : `${r[0]}~${r[1]}번`;
+  const label = rv ? `틀린 지문 다시 · ${ids.length}지문` : r[0] === r[1] ? `${r[0]}번` : `${r[0]}~${r[1]}번`;
   $('#msg').textContent = '서버에서 이름·기기를 확인하는 중…'; $('#go').disabled = true;
   const g = await gate(name, label);
   $('#go').disabled = false;
@@ -565,8 +570,8 @@ async function start() {
   const u = await UNLOCK.run(ENCW, g, KEYST, BANK);   // 콘텐츠 보호(2026-10-06)
   if (!u.ok) { $('#msg').textContent = u.msg; window.scrollTo(0, 0); return; }
   $('#msg').textContent = ''; $('#who').textContent = name + ' 학생';
-  const key = r[0] === r[1] ? String(r[0]) : `${r[0]}-${r[1]}`;
-  cur = {ids, key, name, label, round: 0};
+  const key = rv ? '틀린 지문' : r[0] === r[1] ? String(r[0]) : `${r[0]}-${r[1]}`;
+  cur = {ids, key, name, label, round: 0, review: rv};
   $('#home').hidden = true; $('#test').hidden = false;
   newRound();
 }
@@ -577,6 +582,7 @@ $('#consentOk').onclick = () => { store.set('consent', consentId()); $('#consent
 $('#consentNo').onclick = () => { $('#consentCard').hidden = true; $('#msg').textContent = '동의하지 않으면 이 앱을 이용할 수 없습니다.'; };
 
 function newRound() {
+  if (cur.review) { const w = wrongIds(); if (!w.length) { renderHome(); $('#msg').textContent = '틀린 지문을 모두 맞혔습니다!'; return; } cur.ids = w; cur.label = `틀린 지문 다시 · ${w.length}지문`; }
   const {ids, key, label} = cur;
   cur.qs = makeSet(ids); cur.sel = Array(cur.qs.length).fill(-1); cur.round++; cur.pts = pointsFor(cur.qs.length); updateSubmit();
   $('#tNo').textContent = label;
@@ -620,6 +626,8 @@ function grade() {
   const byId = {}; qs.forEach((q, qi) => { const b = byId[q.id] || (byId[q.id] = [0, 0]); b[1] += cur.pts[qi]; if (sel[qi] === q.ans) b[0] += cur.pts[qi]; });
   for (const [i, [got, tot]] of Object.entries(byId)) { const r = rec[i] || (rec[i] = {tries: 0, best: 0}); r.tries++; r.best = Math.max(r.best, Math.round(got * 100 / tot)); }
   store.set('rec2', rec);
+  for (const [i, [got, tot]] of Object.entries(byId)) { if (got < tot) wrongs[i] = {n: ((wrongs[i] || {}).n || 0) + 1, at: time}; else delete wrongs[i]; }
+  store.set('wrongs', wrongs);
   const cnt = {문법: 0, 해석: 0, 단어: 0}; entry.wrong.forEach(w => cnt[w.type]++);
   const cert = {name, key, score, correct, n: N, time, wrong: entry.wrong.length ? `문법 ${cnt.문법} · 해석 ${cnt.해석} · 단어 ${cnt.단어}` : '없음', dur: fmtDur(entry.sec)};
   cert.code = certCode(name, key, certTries(cert), time, certExtra(cert));
@@ -644,7 +652,12 @@ function grade() {
 }
 
 $('#submit').onclick = grade;
-$('#go').onclick = start;
+$('#go').onclick = () => { reviewStart = false; start(); };
+// 2026-11-02 틀린 지문 다시 풀기: 많이 틀린 지문·최근 틀린 지문부터 10지문까지
+let reviewStart = false;
+function wrongIds() { return Object.keys(wrongs).filter(i => BANK[i]).sort((a, b) => wrongs[b].n - wrongs[a].n || (wrongs[b].at > wrongs[a].at ? 1 : wrongs[b].at < wrongs[a].at ? -1 : 0)).slice(0, 10).map(Number).sort((a, b) => a - b); }
+function paintWrong() { const b = $('#wrongGo'); if (!b) return; const n = Object.keys(wrongs).filter(i => BANK[i]).length; b.hidden = !n; b.textContent = `틀린 지문 다시 풀기 (${n}지문)`; }
+$('#wrongGo').onclick = () => { reviewStart = true; start(); };
 ['#from', '#to'].forEach(s => { $(s).oninput = paintGrid; $(s).onkeydown = e => { if (e.key === 'Enter') start(); }; });
 $('#home2').onclick = () => {
   const b = $('#home2');
