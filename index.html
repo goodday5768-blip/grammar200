@@ -136,7 +136,7 @@ input[type=radio],input[type=checkbox]{width:19px;height:19px}
     <div class="row" style="margin-bottom:10px"><input type="text" id="name" placeholder="이름 (필수)" aria-label="이름"><select id="nameSel" hidden aria-label="이름 선택"></select></div>
     <div class="card" id="consentCard" hidden style="margin:0 0 10px">
       <b>개인정보 수집·이용 동의</b>
-      <div id="consentP" style="margin:8px 0 0;font-size:calc(14px*var(--fz,1));line-height:1.6">이승수영어전문학원은 수강생 전용 <b>유료 학습 자료</b>인 이 앱을 운영하며, 아래와 같이 개인정보를 수집·이용합니다(개인정보 보호법 제15조·제22조·제28조의8).<ul style='margin:6px 0;padding-left:20px'><li><b>목적</b>: 학습 관리(점수·틀린 문제 확인), 유료 자료 무단 공유 확인과 기기 제한</li><li><b>항목</b>: 이름, 학습 기록(고른 범위·단계, 점수, 틀린 문제·유형, 응시 시각, 걸린 시간), 이 브라우저에 붙인 무작위 기기 표식, 브라우저 종류. 전화번호·위치는 수집하지 않습니다.</li><li><b>보유·이용 기간</b>: 수강을 마친 날부터 6개월까지 보관한 뒤 지웁니다.</li><li><b>보관 장소(국외 이전)</b>: 기록은 앱을 쓸 때마다 암호화된 인터넷 통신으로 Google LLC(미국)에 전송되어, 위 기간 동안 선생님의 구글 시트·지메일에 보관됩니다.</li><li><b>동의를 거부할 권리</b>: 동의하지 않을 수 있습니다. 이 경우 이 앱은 이용할 수 없지만 학원 수업에는 불이익이 없습니다. 동의 철회와 기록 열람·삭제는 선생님께 요청하세요.</li></ul>이름 하나로 <b>기기 2대까지</b> 쓸 수 있으며, 그 이상의 이용은 선생님께 보고되고 제한될 수 있습니다(기기를 바꿨으면 선생님께 말씀하세요). 문제와 지문을 복사·캡처해 다른 사람에게 전달하는 것을 금합니다.</div>
+      <div id="consentP" style="margin:8px 0 0;font-size:calc(14px*var(--fz,1));line-height:1.6">이승수영어전문학원은 수강생의 <b>대면 수업 보조 자료</b>로 이 앱을 운영하며(앱 안에서 판매하는 것은 없습니다), 아래와 같이 개인정보를 수집·이용합니다(개인정보 보호법 제15조·제22조·제28조의8).<ul style='margin:6px 0;padding-left:20px'><li><b>목적</b>: 학습 관리(점수·틀린 문제 확인), 학습 자료 무단 공유 확인과 기기 제한</li><li><b>항목</b>: 이름, 학습 기록(고른 범위·단계, 점수, 틀린 문제·유형, 응시 시각, 걸린 시간), 이 브라우저에 붙인 무작위 기기 표식, 브라우저 종류. 전화번호·위치는 수집하지 않습니다.</li><li><b>보유·이용 기간</b>: 수강을 마친 날부터 6개월까지 보관한 뒤 지웁니다.</li><li><b>보관 장소(국외 이전)</b>: 기록은 앱을 쓸 때마다 암호화된 인터넷 통신으로 Google LLC(미국)에 전송되어, 위 기간 동안 선생님의 구글 시트·지메일에 보관됩니다.</li><li><b>동의를 거부할 권리</b>: 동의하지 않을 수 있습니다. 이 경우 이 앱은 이용할 수 없지만 학원 수업에는 불이익이 없습니다. 동의 철회와 기록 열람·삭제는 선생님께 요청하세요.</li></ul>이름 하나로 <b>기기 2대까지</b> 쓸 수 있으며, 그 이상의 이용은 선생님께 보고되고 제한될 수 있습니다(기기를 바꿨으면 선생님께 말씀하세요). 문제와 지문을 복사·캡처해 다른 사람에게 전달하는 것을 금합니다.</div>
       <div id="consentV" style="margin-top:6px;font-size:calc(12px*var(--fz,1));opacity:.6"></div>
       <div class="row" style="margin-top:12px"><button id="consentOk" style="flex:1">동의하고 시작</button><button class="ghost" id="consentNo">동의하지 않음</button></div>
     </div>
@@ -167,7 +167,7 @@ input[type=radio],input[type=checkbox]{width:19px;height:19px}
     <div id="mycerts"></div>
     <p class="muted" id="mycertMsg" style="margin:6px 0 0"></p>
   </div>
-  <p class="teacherlink"><button class="ghost" id="teacherBtn">선생님 화면</button></p>
+  <p class="teacherlink"><button class="ghost" id="teacherBtn" hidden>선생님 화면</button></p>
 </section>
 
 <section id="test" hidden>
@@ -682,11 +682,11 @@ $('#teacherBtn').onclick = () => { renderTeacher(); loadTeacher(); };
 // 앱 주소 뒤에 ?teacher=코드 를 붙여 한 번 열면 이 기기에 저장되고 버튼이 나타난다. 제목을 빠르게 7번 누르면 코드 입력창.
 // 2026-09-25 사용자 확정: 주소 뒤 `?teacher` 만 붙이면 열린다(코드 생략 시 기본 코드). 코드를 바꾸려면 서버 TEACHER_CODE를 바꾸고 `?teacher=새코드`로 연다.
 const T_DEFAULT = 'ls2026';
-{ const q = new URLSearchParams(location.search); if (q.has('teacher')) { store.set('tcode', (q.get('teacher') || '').trim() || T_DEFAULT); history.replaceState(null, '', location.pathname); } }
+{ const q = new URLSearchParams(location.search); if (q.has('teacher') && !window.__leessStudent) { store.set('tcode', (q.get('teacher') || '').trim() || T_DEFAULT); history.replaceState(null, '', location.pathname); } }
 const tcode = () => store.get('tcode', '');
-$('#teacherBtn').hidden = !tcode();
+$('#teacherBtn').hidden = !tcode() || !!window.__leessStudent;
 { let taps = 0, t0 = 0; $('#appTitle').addEventListener('click', () => { const now = Date.now(); taps = now - t0 < 1500 ? taps + 1 : 1; t0 = now;
-  if (taps >= 7) { taps = 0; const c = prompt('선생님 코드를 입력하세요'); if (c && c.trim()) { store.set('tcode', c.trim()); $('#teacherBtn').hidden = false; } } }); }
+  if (taps >= 7 && !window.__leessStudent) { taps = 0; const c = prompt('선생님 코드를 입력하세요'); if (c && c.trim()) { store.set('tcode', c.trim()); $('#teacherBtn').hidden = false; } } }); }
 // 구글 시트 요약: Apps Script doGet(?teacher=코드&app=제목) — 코드는 서버만 안다(앱 코드에 없음)
 async function loadTeacher() {
   const msg = $('#tMsg'), url = CFG.report_url;
